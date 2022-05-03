@@ -202,7 +202,7 @@ off_t offset;			  /* offset to the start of the inode table */
 int inode_no;			  /* the inode number to read  */
 struct ext2_inode *inode; /* where to put the inode */
 {
-	printf("%d\n", ngroup);
+	ngroup = ngroup;
 	lseek(fd, offset + (inode_no - 1) * sizeof(struct ext2_inode), SEEK_SET);
 	read(fd, inode, sizeof(struct ext2_inode));
 }
