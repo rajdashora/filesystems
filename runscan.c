@@ -15,7 +15,11 @@ int main(int argc, char **argv)
 	DIR *dir = opendir(argv[2]);
 	if (dir == NULL)
 	{
-		printf("error: could not open directory %s\n", argv[2]);
+		mkdir(argv[2], S_IRWXU);
+	}
+	else 
+	{
+		printf("Directory already exists.\n");
 		exit(0);
 	}
 
@@ -44,18 +48,19 @@ int main(int argc, char **argv)
 		for (unsigned int k = 0; k < inodes_per_block; k++) {
 			struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
 			// uint location = start_inode_table + (j * inodes_per_block * sizeof(struct ext2_inode)) + (k * sizeof(struct ext2_inode));
-			int inode_no = (j * inodes_per_block) + k;
-			read_inode(fd, 0, start_inode_table, inode_no, inode);
+			int inode_idx = (j * inodes_per_block) + k;
+			int inode_num = inode_idx + 1;
+			read_inode(fd, 0, start_inode_table, inode_idx, inode);
 
 			// printf("Unused : %u\n", !inode->i_block[0]);
-
+			
 			if (S_ISREG(inode->i_mode))
 			{
 				// build buffer
 				char buffer[1024];
-
+				
 				lseek(fd, BLOCK_OFFSET(inode->i_block[0]), SEEK_SET);
-				read(fd, buffer, 1024);
+				read(fd, buffer, sizeof(buffer));
 
 				// check if jpg
 				int is_jpg = 0;
@@ -68,14 +73,57 @@ int main(int argc, char **argv)
 				{
 					is_jpg = 1;
 				}
-				printf("is jpg %u\n", is_jpg);
-				printf("in ode %u\n", inode_no);
+				// printf("is jpg %u\n", is_jpg);
+				// printf("inode index %u\n", inode_idx);
+				char pathname[256];
+				char filenum[10];
+				sprintf(filenum, "%d", inode_num);
+				snprintf(pathname, sizeof(pathname), "%s/file-%s.jpg", argv[2], filenum);
+				// printf("%s\n", pathname);
+				if (is_jpg == 1){
+					// write to file with inode number
+					int ff = open(pathname, O_WRONLY | O_TRUNC | O_CREAT, 0666);
+					for (unsigned int i = 0; i < EXT2_N_BLOCKS; i++) {
+						/* single indirect block */
+						if (i == EXT2_IND_BLOCK)
+						{  	//get block number 2000
+							int indirect_i_block[256]; // TODO: WRONG
+							lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
+							read(fd, indirect_i_block, 1024);
+
+							for (unsigned int l = 0; l < 256; l++) {
+								lseek(fd, BLOCK_OFFSET(indirect_i_block[l]), SEEK_SET);
+								read(fd, buffer, 1024);
+							}
+							
+						} 
+						/* double indirect block */
+						else if (i == EXT2_DIND_BLOCK)
+						{
+							lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
+							read(fd, buffer, 1024);
+						} 
+						/* triple indirect block */
+						else if (i == EXT2_TIND_BLOCK)
+						{
+							lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
+							read(fd, buffer, 1024);
+						} 	
+						else {
+							lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
+							read(fd, buffer, 1024);
+						}
+						write(ff, buffer, sizeof(buffer));
+					}
+					// write to file with original name
+				}
 			}
 			free(inode);
 		}
 	}
 	
 	
+
 
 	// for (unsigned int i = 0; i < inodes_per_block; i++)
 	// {
