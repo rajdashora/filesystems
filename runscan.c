@@ -49,7 +49,6 @@ int main(int argc, char **argv)
 			struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
 			// uint location = start_inode_table + (j * inodes_per_block * sizeof(struct ext2_inode)) + (k * sizeof(struct ext2_inode));
 			int inode_idx = (j * inodes_per_block) + k;
-			int inode_num = inode_idx + 1;
 			read_inode(fd, 0, start_inode_table, inode_idx, inode);
 
 			// printf("Unused : %u\n", !inode->i_block[0]);
@@ -77,7 +76,7 @@ int main(int argc, char **argv)
 				// printf("inode index %u\n", inode_idx);
 				char pathname[256];
 				char filenum[10];
-				sprintf(filenum, "%d", inode_num);
+				sprintf(filenum, "%d", inode_idx);
 				snprintf(pathname, sizeof(pathname), "%s/file-%s.jpg", argv[2], filenum);
 				// printf("%s\n", pathname);
 				if (is_jpg == 1){
@@ -87,33 +86,42 @@ int main(int argc, char **argv)
 						/* single indirect block */
 						if (i == EXT2_IND_BLOCK)
 						{  	//get block number 2000
-							int indirect_i_block[256]; // TODO: WRONG
+							uint single_buffer[256]; 
 							lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
-							read(fd, indirect_i_block, 1024);
+							read(fd, single_buffer, 1024);
 
 							for (unsigned int l = 0; l < 256; l++) {
-								lseek(fd, BLOCK_OFFSET(indirect_i_block[l]), SEEK_SET);
+								if (single_buffer[l] == 0)
+									break;
+								lseek(fd, BLOCK_OFFSET(single_buffer[l]), SEEK_SET);
 								read(fd, buffer, 1024);
+								write(ff, buffer, sizeof(buffer));
 							}
 							
 						} 
 						/* double indirect block */
 						else if (i == EXT2_DIND_BLOCK)
 						{
+							uint double_buffer[256]; 
 							lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
-							read(fd, buffer, 1024);
-						} 
-						/* triple indirect block */
-						else if (i == EXT2_TIND_BLOCK)
-						{
-							lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
-							read(fd, buffer, 1024);
-						} 	
+							read(fd, double_buffer, 1024);
+
+							for (unsigned int l = 0; l < 256; l++) {
+								uint single_buffer[256];
+								lseek(fd, BLOCK_OFFSET(double_buffer[l]), SEEK_SET);
+								read(fd, single_buffer, 1024);
+								for (unsigned int m = 0; m < 256; m++) {
+									lseek(fd, BLOCK_OFFSET(single_buffer[m]), SEEK_SET);
+									read(fd, buffer, 1024);
+									write(ff, buffer, sizeof(buffer));
+								}
+							}
+						}  	
 						else {
 							lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
 							read(fd, buffer, 1024);
+							write(ff, buffer, sizeof(buffer));
 						}
-						write(ff, buffer, sizeof(buffer));
 					}
 					// write to file with original name
 				}
