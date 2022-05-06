@@ -100,6 +100,7 @@ int main(int argc, char **argv)
 						{
 							head = (struct LLNode *)malloc(sizeof(struct LLNode));
 							curr = head;
+							tail = head;
 						}
 						else
 						{
@@ -201,7 +202,6 @@ int main(int argc, char **argv)
 			}
 		}
 		curr = head; // reset curr back to head
-		printf("%p", (void *)curr);
 
 		// scan through again, this time just want directories
 		for (unsigned int j = 0; j < itable_blocks; j++)
@@ -227,22 +227,32 @@ int main(int argc, char **argv)
 						int name_len = dentry->name_len & 0xFF; // convert 2 bytes to 4 bytes properly
 						char name[EXT2_NAME_LEN];
 						strncpy(name, dentry->name, name_len);
+						// printf("og len: %d\n", name_len);
 						name[name_len] = '\0';
 						if (name_len % 4 != 0)
 							name_len += 4 - (name_len % 4);
+						// printf("new len: %d\n", name_len);
 
 						// navigate through list
-						printf("curr to tail\n");
 						while (1)
 						{
-							printf("%p", (void *)curr);
 							// if data found
 							if (dentry->inode == curr->inode_idx)
 							{
 								char command_name[500];
-								sprintf(command_name, "cp %s/file-%d.jpg %s/%s", argv[2], curr->inode_idx, argv[2], name);
-								printf("Entry name is %s\n", name);
-								system(command_name);
+								char command_name2[500];
+								sprintf(command_name, "cp %s/file-%d.jpg \"%s/%s\"", argv[2], curr->inode_idx, argv[2], name);
+								uint c2 = 0;
+								for (unsigned int c = 0; c < sizeof(command_name); c++)
+								{
+									if (command_name[c] =='$'){
+										command_name2[c2] = '\\';
+										c2++;
+									}
+									command_name2[c2] = command_name[c];
+									c2++;
+								}
+								system(command_name2);
 								break;
 							}
 
@@ -256,14 +266,8 @@ int main(int argc, char **argv)
 							break;
 					}
 				}
-				// if (curr == tail)
-				// 	break;
 			}
-			// if (curr == tail)
-			// break;
 		}
 	}
-	// uint g = 0;
-
 	close(fd);
 }
