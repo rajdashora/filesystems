@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <math.h>
+#include <string.h>
 
 int main(int argc, char **argv)
 {
@@ -25,7 +26,13 @@ int main(int argc, char **argv)
 	}
 
 	int fd;
-
+	struct LLNode {
+		uint inode_idx;
+		struct LLNode* next;
+	};
+	struct LLNode* head = NULL;
+	struct LLNode* curr = NULL;
+	struct LLNode* tail = NULL;
 	fd = open(argv[1], O_RDONLY); /* open disk image */
 
 	ext2_read_init(fd);
@@ -40,12 +47,11 @@ int main(int argc, char **argv)
 	printf("There are %u inodes in an inode table block and %u blocks in the idnode table\n", inodes_per_block, itable_blocks);
 	// iterate the first inode block
 	off_t start_inode_table = locate_inode_table(0, &group);
-
+	
 	// for each inode block (160 blocks) in block group 
 	for (unsigned int j = 0; j < itable_blocks; j++)
 	{
 		// for each inode (8 inodes) in block 
-
 		// get first data block of inode and check if is jpg
 		for (unsigned int k = 0; k < inodes_per_block; k++) {
 			struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
@@ -74,19 +80,31 @@ int main(int argc, char **argv)
 				}
 				// printf("is jpg %u\n", is_jpg);
 				// printf("inode index %u\n", inode_idx);
-				char pathname[256];
-				char filenum[10];
-				sprintf(filenum, "%d", inode_idx);
-				snprintf(pathname, sizeof(pathname), "%s/file-%s.jpg", argv[2], filenum);
+				char pathname[500];
+				sprintf(pathname, "%s/file-%d.jpg", argv[2], inode_idx);
 				// unsigned int last_i_block = ceil(file_size/block_size);
 				if (is_jpg == 1){
+					
 					int ff = open(pathname, O_WRONLY | O_TRUNC | O_CREAT, 0666);
 					uint curr_block_idx = 0;
 					int file_size = inode->i_size;
 					uint final_data_block_idx = floor(file_size/1024);
 					int done = 0;
 					// printf("fsize: %d final data block idx: %d \n", file_size, final_data_block_idx);
+					if (head == NULL)
+					{
+						head = (struct LLNode*)malloc(sizeof(struct LLNode));
+						curr = head;
+						curr->inode_idx = inode_idx;
 
+					}
+					else
+					{
+						curr->next = (struct LLNode*)malloc(sizeof(struct LLNode));
+						curr = curr->next;
+						tail = curr;
+						curr->inode_idx = inode_idx;
+					}
 					for (unsigned int i = 0; i < EXT2_N_BLOCKS; i++) {
 						
 						/* single indirect block */
@@ -173,8 +191,51 @@ int main(int argc, char **argv)
 			free(inode);
 		}
 	}
-	
-	
+	curr = head; // reset curr back to head
+	// scan through again, this time just want directories
+	for (unsigned int j = 0; j < itable_blocks; j++)
+	{
+		for (unsigned int k = 0; k < inodes_per_block; k++) {
+			struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
+			int inode_idx = (j * inodes_per_block) + k;
+			read_inode(fd, 0, start_inode_table, inode_idx, inode);
+			// if is directory
+			if (S_ISDIR(inode->i_mode))
+			{
+				char buffer[1024];
+				lseek(fd, BLOCK_OFFSET(inode->i_block[0]), SEEK_SET);
+				read(fd, buffer, sizeof(buffer));
+				
+
+				uint ptr = 0;
+				while (1) {
+					// printf("ptr: %d\n", ptr);
+
+					struct ext2_dir_entry_2* dentry = (struct ext2_dir_entry_2*) & ( buffer[ptr] );
+					int name_len = dentry->name_len & 0xFF; // convert 2 bytes to 4 bytes properly
+					char name [EXT2_NAME_LEN];
+					strncpy(name, dentry->name, name_len);
+					name[name_len] = '\0';
+					if (name_len % 4 != 0) name_len += 4 - (name_len % 4);
+					// printf("%d\n", name_len % 4);
+					// printf("%d %d\n", dentry->inode, curr->inode_idx);
+					if (dentry->inode == curr->inode_idx) {
+						char command_name[500];
+						sprintf(command_name, "cp %s/file-%d.jpg %s/%s", argv[2], curr->inode_idx, argv[2], name);
+						// printf("Entry name is %s\n", name);
+						system(command_name);
+						if (curr == tail) break;
+						curr = curr->next;
+					}
+					ptr += name_len + 8;
+					if (ptr >= block_size) break;
+				}
+			}
+			if (curr == tail) break;
+		}
+		if (curr == tail) break;
+	}
+
 
 
 	// for (unsigned int i = 0; i < inodes_per_block; i++)
