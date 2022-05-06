@@ -227,11 +227,9 @@ int main(int argc, char **argv)
 						int name_len = dentry->name_len & 0xFF; // convert 2 bytes to 4 bytes properly
 						char name[EXT2_NAME_LEN];
 						strncpy(name, dentry->name, name_len);
-						// printf("og len: %d\n", name_len);
 						name[name_len] = '\0';
 						if (name_len % 4 != 0)
 							name_len += 4 - (name_len % 4);
-						// printf("new len: %d\n", name_len);
 
 						// navigate through list
 						while (1)
